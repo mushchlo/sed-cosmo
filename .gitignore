@@ -1,0 +1,4 @@
+bin/sed.aarch64.elf
+bin/sed.com.dbg
+
+src/cosmo/*
