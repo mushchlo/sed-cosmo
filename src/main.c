@@ -1,10 +1,6 @@
 /*
  * sed -- stream editor
  */
-#include <u.h>
-#include <libc.h>
-#include <bio.h>
-#include <regexp.h>
 
 enum {
 	DEPTH		= 20,		/* max nesting depth of {} */
