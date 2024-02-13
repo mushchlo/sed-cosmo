@@ -1,3 +1,7 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include "9.h"
+
 /*
  * sed -- stream editor
  */
@@ -27,6 +31,7 @@ typedef struct {
 	}type;
 	union {
 		long	line;		/* Line # */
+        // Regex program ?
 		Reprog	*rp;		/* Compiled R.E. */
 	};
 } Addr;
@@ -36,10 +41,13 @@ typedef struct	SEDCOM {
 	Addr	ad2;			/* optional end address */
 	union {
 		Reprog	*re1;		/* compiled R.E. */
+        //! Runes are plan 9's way of talking about unicode codepoints.
 		Rune	*text;		/* added text or file name */
 		struct	SEDCOM	*lb1;	/* destination command of branch */
 	};
 	Rune	*rhs;			/* Right-hand side of substitution */
+    //! Biobuf is a pointer to buffered I/O. this might be implemented by justine honestly, i love bio
+    //! and assume she would too.
 	Biobuf*	fcode;			/* File ID for read and write */
 	char	command;		/* command code -see below */
 	char	gfl;			/* 'Global' flag for substitutions */
@@ -94,7 +102,8 @@ SedCom *rep = pspace;			/* Current fill point */
 
 int	dollars;			/* Number of dollar (first) addresses */
 
-Reprog	*lastre;			/* Last regular expression */
+Reprog	*lastire;			/* Last regular expression */
+//! Resub is a subpattern of a regex pattern match
 Resub	subexp[MAXSUB];			/* sub-patterns of pattern match*/
 
 Rune	addspace[ADDSIZE];		/* Buffer for a, c, & i commands */
@@ -1386,7 +1395,7 @@ quit(char *fmt, ...)
 	va_start(arg, fmt);
 	p = vseprint(p, ep, fmt, arg);
 	va_end(arg);
-	p = seprint(p, ep, "\n");
+	p = (char*) seprint(p, ep, "\n");
 	write(2, msg, p - msg);
 	errexit();
 }
