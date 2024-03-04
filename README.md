@@ -1,5 +1,5 @@
 To build:
 ```
-cosmo/bin/cosmocc -o hello hello.c
-./hello
+./prebuild.sh
+./build.sh
 ```

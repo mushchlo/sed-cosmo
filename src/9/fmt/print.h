@@ -1,9 +1,10 @@
-#include "u.h"
-#include "libc.h"
+#include <stdlib.h>
+#include "../u.h"
+#include "fmt.h"
+
 
 char*
-vseprint(char *buf, char *e, char *fmt, va_list args)
-{
+vseprint(char *buf, char *e, char *fmt, va_list args){
 	if(e <= buf)
 		return nil;
     Fmt f = {

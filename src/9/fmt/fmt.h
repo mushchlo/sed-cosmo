@@ -1,4 +1,5 @@
-#include "u.h"
+#include "../u.h"
+
 struct Fmt;
 struct Fmt {
     uchar   runes;			/* output buffer is runes or chars? */

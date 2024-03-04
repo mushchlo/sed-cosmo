@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "9.h"
+#include "9/u.h"
+#include "9/libc.h"
+#include "9/regex/regex.h"
+#include "9/bio.h"
 
 /*
  * sed -- stream editor
@@ -120,7 +123,7 @@ struct {				/* Sed program input control block */
 	union PCTL {			/* Pointer to data */
 		Biobuf	*bp;
 		char	*curr;
-	};
+	} data;
 } prog;
 
 Rune	genbuf[LBSIZE+1];		/* Miscellaneous buffer */
@@ -159,6 +162,7 @@ int	nfiles;				/* Cache fill point */
 Biobuf	fout;				/* Output stream */
 Biobuf	stdin;				/* Default input */
 Biobuf*	f;				/* Input data */
+#define H(x) &(x)->hdr
 
 Label	ltab[LABSIZE];			/* Label name symbol table */
 Label	*labend = ltab+LABSIZE;		/* End of label table */
@@ -214,7 +218,7 @@ main(int argc, char **argv)
 
 	lnum = 0;
 	Binit(&fout, 1, OWRITE);
-	Blethal(&fout, nil);
+	Blethal(H(&fout), nil);
 	fcode[nfiles++] = &fout;
 	compfl = 0;
 
@@ -624,8 +628,8 @@ open_file(char *name)
 	    (fd = create(name, OWRITE, 0666)) < 0)
 		quit("Cannot create %s", name);
 	Binit(bp, fd, OWRITE);
-	Blethal(bp, nil);
-	Bseek(bp, 0, 2);
+	Blethal(H(bp), nil);
+	Bseek(H(bp), 0, 2);
 	fcode[nfiles++] = bp;
 	return bp;
 }
@@ -702,7 +706,7 @@ flushout(Biobufhdr *bp, void *v, long n)
 	int i;
 	
 	for(i = 0; i < nfiles; i++)
-		Bflush(fcode[i]);
+		Bflush(H(fcode[i]));
 	return read(bp->fid, v, n);
 }
 
@@ -710,12 +714,12 @@ void
 newfile(enum PTYPE type, char *name)
 {
 	if (type == P_ARG)
-		prog.curr = name;
+		prog.data.curr = name;
 	else {
-		if ((prog.bp = Bopen(name, OREAD)) == 0)
+		if ((prog.data.bp = Bopen(name, OREAD)) == 0)
 			quit("Cannot open pattern-file: %s\n", name);
-		Blethal(prog.bp, nil);
-		if(uflag) Biofn(prog.bp, flushout);
+		Blethal(H(prog.data.bp), nil);
+		if(uflag) Biofn(H(prog.data.bp), flushout);
 	}
 	prog.type = type;
 }
@@ -753,18 +757,18 @@ getrune(void)
 	char *p;
 
 	if (prog.type == P_ARG) {
-		if ((p = prog.curr) != 0) {
+		if ((p = prog.data.curr) != 0) {
 			if (*p) {
-				prog.curr += chartorune(&r, p);
+				prog.data.curr += chartorune(&r, p);
 				c = r;
 			} else {
 				c = '\n';	/* fake an end-of-line */
-				prog.curr = 0;
+				prog.data.curr = 0;
 			}
 		} else
 			c = -1;
-	} else if ((c = Bgetrune(prog.bp)) < 0)
-		Bterm(prog.bp);
+	} else if ((c = Bgetrune(H(prog.data.bp))) < 0)
+		Bterm(H(prog.data.bp));
 	return c;
 }
 
@@ -798,7 +802,7 @@ address(Addr *ap)
 	}
 }
 
-cmp(char *a, char *b)		/* compare characters */
+int cmp(char *a, char *b)		/* compare characters */
 {
 	while(*a == *b++)
 		if (*a == '\0')
@@ -807,7 +811,7 @@ cmp(char *a, char *b)		/* compare characters */
 			a++;
 	return 1;
 }
-rcmp(Rune *a, Rune *b)		/* compare runes */
+int rcmp(Rune *a, Rune *b)		/* compare runes */
 {
 	while(*a == *b++)
 		if (*a == '\0')
@@ -1159,8 +1163,8 @@ command(SedCom *ipc)
 		delflag = 1;
 		if(ipc->active == 1) {
 			for(rp = ipc->text; *rp; rp++)
-				Bputrune(&fout, *rp);
-			Bputc(&fout, '\n');
+				Bputrune(H(&fout), *rp);
+			Bputc(H(&fout), '\n');
 		}
 		break;
 	case DCOM:
@@ -1181,7 +1185,7 @@ command(SedCom *ipc)
 		jflag++;
 		break;
 	case EQCOM:
-		Bprint(&fout, "%ld\n", lnum);
+		Bprint(H(&fout), "%ld\n", lnum);
 		break;
 	case GCOM:
 		p1 = linebuf;
@@ -1216,8 +1220,8 @@ command(SedCom *ipc)
 		break;
 	case ICOM:
 		for(rp = ipc->text; *rp; rp++)
-			Bputrune(&fout, *rp);
-		Bputc(&fout, '\n');
+			Bputrune(H(&fout), *rp);
+		Bputc(H(&fout), '\n');
 		break;
 	case BCOM:
 		jflag = 1;
@@ -1227,25 +1231,25 @@ command(SedCom *ipc)
 		for (i = 0, rp = linebuf; *rp; rp++) {
 			c = *rp;
 			if(c >= 0x20 && c < 0x7F && c != '\\') {
-				Bputc(&fout, c);
+				Bputc(H(&fout), c);
 				if(i++ > 71) {
-					Bprint(&fout, "\\\n");
+					Bprint(H(&fout), "\\\n");
 					i = 0;
 				}
 			} else {
 				for (ucp = trans(*rp); *ucp; ucp++){
 					c = *ucp;
-					Bputc(&fout, c);
+					Bputc(H(&fout), c);
 					if(i++ > 71) {
-						Bprint(&fout, "\\\n");
+						Bprint(H(&fout), "\\\n");
 						i = 0;
 					}
 				}
 			}
 		}
 		if(c == ' ')
-			Bprint(&fout, "\\n");
-		Bputc(&fout, '\n');
+			Bprint(H(&fout), "\\n");
+		Bputc(H(&fout), '\n');
 		break;
 	case NCOM:
 		if(!nflag)
@@ -1275,8 +1279,8 @@ command(SedCom *ipc)
 	case CPCOM:
 cpcom:
 		for(rp = linebuf; *rp && *rp != '\n'; rp++)
-			Bputc(&fout, *rp);
-		Bputc(&fout, '\n');
+			Bputc(H(&fout), *rp);
+		Bputc(H(&fout), '\n');
 		break;
 	case QCOM:
 		if(!nflag)
@@ -1342,7 +1346,7 @@ void
 putline(Biobuf *bp, Rune *buf, int n)
 {
 	while (n--)
-		Bputrune(bp, *buf++);
+		Bputrune(H(bp), *buf++);
 	Bputc(bp, '\n');
 }
 
@@ -1358,7 +1362,7 @@ arout(void)
 	for (aptr = abuf; *aptr; aptr++) {
 		if((*aptr)->command == ACOM) {
 			for(p1 = (*aptr)->text; *p1; p1++ )
-				Bputrune(&fout, *p1);
+				Bputrune(H(&fout), *p1);
 			Bputc(&fout, '\n');
 		} else {
 			for(s = buf, e = buf+sizeof(buf)-UTFmax-1, p1 = (*aptr)->text; *p1 && s < e; p1++)
@@ -1414,7 +1418,7 @@ gline(Rune *addr)
 /*	Bflush(&fout);********* dumped 4/30/92 - bobf****/
 	do {
 		p = addr;
-		for (c = (peekc? peekc: Bgetrune(f)); c >= 0; c = Bgetrune(f)) {
+		for (c = (peekc? peekc: Bgetrune(FHDR)); c >= 0; c = Bgetrune(FHDR)) {
 			if (c == '\n') {
 				if (dollars != 0 && (peekc = Bgetrune(f)) < 0 && fhead == nil)
 					dolflag = 1;
